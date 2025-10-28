@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Two-Factor Authentication</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="../base1/cockpit.css" type="text/css" rel="stylesheet">
+    <script src="../base1/cockpit.js"></script>
+    <style>
+        .status-badge {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+        .status-enabled {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .status-disabled {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .section {
+            margin-top: 30px;
+            padding: 20px;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            background-color: #f8f9fa;
+        }
+        .btn-danger {
+            background-color: #dc3545;
+            border-color: #dc3545;
+            color: white;
+        }
+        .btn-danger:hover {
+            background-color: #c82333;
+            border-color: #bd2130;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <h2>Two-Factor Authentication
+            <span id="status-badge" class="status-badge"></span>
+        </h2>
+        
+        <div id="current-status" style="margin-top:20px; padding:15px; border-radius:5px;"></div>
+        
+        <!-- Section for enabling 2FA -->
+        <div id="enable-section" class="section" style="display:none;">
+            <h3>Enable Two-Factor Authentication</h3>
+            <p>Scan the QR code below with your authenticator app (Google Authenticator, Authy, etc.)</p>
+            <button id="generate-qr" class="btn btn-primary">Generate QR Code</button>
+            <div id="qr-code" style="margin-top:20px;"></div>
+            <div id="verify-section" style="display:none; margin-top:20px;">
+                <input id="verification-code" type="text" class="form-control" placeholder="Enter 6-digit code" style="max-width:300px; margin-bottom:10px;">
+                <button id="verify-code" class="btn btn-success">Verify & Enable</button>
+            </div>
+        </div>
+        
+        <!-- Section for disabling 2FA -->
+        <div id="disable-section" class="section" style="display:none;">
+            <h3>Disable Two-Factor Authentication</h3>
+            <p>⚠️ Warning: This will remove 2FA protection from your account.</p>
+            <button id="disable-2fa" class="btn btn-danger">Disable 2FA</button>
+        </div>
+        
+        <div id="message" style="margin-top:20px; padding:10px; border-radius:4px;"></div>
+    </div>
+
+    <script>
+    (function() {
+        console.log('2FA module loading...');
+        
+        // Elements
+        var statusBadge = document.getElementById('status-badge');
+        var currentStatus = document.getElementById('current-status');
+        var enableSection = document.getElementById('enable-section');
+        var disableSection = document.getElementById('disable-section');
+        var generateBtn = document.getElementById('generate-qr');
+        var verifySection = document.getElementById('verify-section');
+        var verifyBtn = document.getElementById('verify-code');
+        var disableBtn = document.getElementById('disable-2fa');
+        var qrDiv = document.getElementById('qr-code');
+        var codeInput = document.getElementById('verification-code');
+        var messageDiv = document.getElementById('message');
+        
+        // Check initial status
+        function checkStatus() {
+            console.log('Checking 2FA status...');
+            cockpit.spawn(['/usr/share/cockpit/cockpit-2fa/cockpit-2fa-status.sh'])
+                .done(function(status) {
+                    status = status.trim();
+                    console.log('2FA status:', status);
+                    updateUI(status);
+                })
+                .fail(function(err) {
+                    console.error('Status check failed:', err);
+                    showMessage('Failed to check 2FA status', 'error');
+                });
+        }
+        
+        function updateUI(status) {
+            if (status === 'enabled') {
+                statusBadge.textContent = 'Enabled';
+                statusBadge.className = 'status-badge status-enabled';
+                currentStatus.innerHTML = '<strong>✓ Two-Factor Authentication is currently enabled</strong>';
+                currentStatus.style.backgroundColor = '#d4edda';
+                currentStatus.style.color = '#155724';
+                enableSection.style.display = 'none';
+                disableSection.style.display = 'block';
+            } else {
+                statusBadge.textContent = 'Disabled';
+                statusBadge.className = 'status-badge status-disabled';
+                currentStatus.innerHTML = '<strong>⚠ Two-Factor Authentication is currently disabled</strong><br>Your account is less secure without 2FA.';
+                currentStatus.style.backgroundColor = '#fff3cd';
+                currentStatus.style.color = '#856404';
+                enableSection.style.display = 'block';
+                disableSection.style.display = 'none';
+            }
+            qrDiv.innerHTML = '';
+            verifySection.style.display = 'none';
+            codeInput.value = '';
+        }
+        
+        function showMessage(text, type) {
+            messageDiv.textContent = text;
+            messageDiv.style.display = 'block';
+            
+            if (type === 'success') {
+                messageDiv.style.backgroundColor = '#d4edda';
+                messageDiv.style.color = '#155724';
+            } else if (type === 'error') {
+                messageDiv.style.backgroundColor = '#f8d7da';
+                messageDiv.style.color = '#721c24';
+            } else {
+                messageDiv.style.backgroundColor = '#d1ecf1';
+                messageDiv.style.color = '#0c5460';
+            }
+            
+            setTimeout(function() {
+                messageDiv.style.display = 'none';
+            }, 5000);
+        }
+        
+        // Generate QR Code
+        generateBtn.addEventListener('click', function() {
+            console.log('Generate QR clicked');
+            showMessage('Generating QR code...', 'info');
+            qrDiv.innerHTML = '';
+            generateBtn.disabled = true;
+            
+            cockpit.spawn(['/usr/share/cockpit/cockpit-2fa/cockpit-2fa-setup.sh'], { 
+                superuser: "try",
+                err: "message"
+            })
+            .done(function(base64Data) {
+                console.log('QR code generated, length:', base64Data.length);
+                generateBtn.disabled = false;
+                
+                if (!base64Data || base64Data.trim().length === 0) {
+                    showMessage('Error: No QR code data received', 'error');
+                    return;
+                }
+                
+                var cleanBase64 = base64Data.trim();
+                qrDiv.innerHTML = '<img src="data:image/png;base64,' + cleanBase64 + '" alt="QR Code" style="max-width:300px; border: 2px solid #28a745; padding: 10px; background: white;"/>';
+                verifySection.style.display = 'block';
+                showMessage('Scan the QR code with your authenticator app', 'success');
+            })
+            .fail(function(err, data) {
+                console.error('QR generation error:', err, data);
+                generateBtn.disabled = false;
+                showMessage('Failed to generate QR code: ' + (data || err), 'error');
+            });
+        });
+        
+        // Verify and enable
+        verifyBtn.addEventListener('click', function() {
+            var code = codeInput.value.trim();
+            console.log('Verify clicked, code length:', code.length);
+            
+            if (!code || code.length !== 6) {
+                showMessage('Please enter a 6-digit verification code', 'error');
+                return;
+            }
+            
+            verifyBtn.disabled = true;
+            showMessage('Verifying code...', 'info');
+            
+            cockpit.spawn(['/usr/share/cockpit/cockpit-2fa/cockpit-2fa-verify.sh', code], {
+                err: "message"
+            })
+            .done(function(result) {
+                console.log('Verification result:', result);
+                verifyBtn.disabled = false;
+                var trimmedResult = result.trim();
+                
+                if (trimmedResult.toLowerCase().includes('success') || trimmedResult.toLowerCase().includes('verified')) {
+                    showMessage('2FA enabled successfully!', 'success');
+                    setTimeout(function() {
+                        checkStatus();
+                    }, 1500);
+                } else {
+                    showMessage('Verification failed: Invalid code', 'error');
+                }
+            })
+            .fail(function(err, data) {
+                console.error('Verification error:', err, data);
+                verifyBtn.disabled = false;
+                showMessage('Verification failed: ' + (data || err), 'error');
+            });
+        });
+        
+        // Disable 2FA
+        disableBtn.addEventListener('click', function() {
+            if (!confirm('Are you sure you want to disable Two-Factor Authentication?\n\nThis will make your account less secure.')) {
+                return;
+            }
+            
+            console.log('Disable 2FA clicked');
+            disableBtn.disabled = true;
+            showMessage('Disabling 2FA...', 'info');
+            
+            cockpit.spawn(['/usr/share/cockpit/cockpit-2fa/cockpit-2fa-disable.sh'], {
+                superuser: "try",
+                err: "message"
+            })
+            .done(function(result) {
+                console.log('Disable result:', result);
+                disableBtn.disabled = false;
+                showMessage('2FA disabled successfully', 'success');
+                setTimeout(function() {
+                    checkStatus();
+                }, 1500);
+            })
+            .fail(function(err, data) {
+                console.error('Disable error:', err, data);
+                disableBtn.disabled = false;
+                showMessage('Failed to disable 2FA: ' + (data || err), 'error');
+            });
+        });
+        
+        // Initial status check
+        checkStatus();
+        
+        console.log('2FA module loaded successfully');
+    })();
+    </script>
+</body>
+</html>
