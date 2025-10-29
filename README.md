@@ -3,7 +3,7 @@
 It require Google Authenticator
 
 ``
-sudo apt install libpam-google-authenticator -y
+sudo apt install libpam-google-authenticator
 ``
 
 And oathtool to verify it
