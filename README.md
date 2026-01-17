@@ -19,3 +19,5 @@ Done.
 ![cockpit-mfa_enable](https://github.com/user-attachments/assets/8471471b-18e4-432c-bdbc-8c177891ad8b)
 
 ![cockpit-mfa-disable](https://github.com/user-attachments/assets/b956e9b7-f99f-476c-bb1e-e5ab8fba5bd9)
+
+## GPLv3
