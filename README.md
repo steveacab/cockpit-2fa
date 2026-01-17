@@ -20,4 +20,5 @@ Done.
 
 ![cockpit-mfa-disable](https://github.com/user-attachments/assets/b956e9b7-f99f-476c-bb1e-e5ab8fba5bd9)
 
-## GPLv3
+## License
+GPLv3
